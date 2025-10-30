@@ -29,55 +29,80 @@ module.exports = async (req, res) => {
             });
         }
 
-        console.log('Processing image...');
+        console.log('Processing image... Image size:', image_file_b64.length);
 
-        // Make request to Remove.bg API using native fetch (Node 18+)
-        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+        // Use native https module for better reliability
+        const https = require('https');
+        
+        const postData = JSON.stringify({
+            image_file_b64: image_file_b64,
+            size: 'auto'
+        });
+
+        const options = {
+            hostname: 'api.remove.bg',
+            port: 443,
+            path: '/v1.0/removebg',
             method: 'POST',
             headers: {
                 'X-Api-Key': API_KEY,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Length': Buffer.byteLength(postData)
             },
-            body: JSON.stringify({
-                image_file_b64: image_file_b64,
-                size: 'auto',
-                format: 'png'
-            })
-        });
+            timeout: 30000
+        };
 
-        console.log('API Response Status:', response.status);
+        const makeRequest = () => {
+            return new Promise((resolve, reject) => {
+                const apiReq = https.request(options, (apiRes) => {
+                    console.log('API Response Status:', apiRes.statusCode);
+                    console.log('API Response Headers:', apiRes.headers);
 
-        // Check if response is OK
-        if (!response.ok) {
-            let errorMessage = 'Failed to remove background';
-            
-            try {
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const errorData = await response.json();
-                    errorMessage = errorData.errors?.[0]?.title || errorMessage;
-                } else {
-                    const textError = await response.text();
-                    console.error('Non-JSON error response:', textError.substring(0, 200));
-                    errorMessage = `API Error: ${response.status}`;
-                }
-            } catch (parseError) {
-                console.error('Error parsing error response:', parseError);
-            }
+                    let data = [];
 
-            return res.status(response.status).json({ 
-                success: false, 
-                error: errorMessage 
+                    apiRes.on('data', (chunk) => {
+                        data.push(chunk);
+                    });
+
+                    apiRes.on('end', () => {
+                        const buffer = Buffer.concat(data);
+                        
+                        if (apiRes.statusCode !== 200) {
+                            // Try to parse error as JSON
+                            try {
+                                const errorText = buffer.toString();
+                                console.error('Error response:', errorText.substring(0, 500));
+                                
+                                const error = JSON.parse(errorText);
+                                reject(new Error(error.errors?.[0]?.title || `API Error: ${apiRes.statusCode}`));
+                            } catch (e) {
+                                reject(new Error(`API returned status ${apiRes.statusCode}`));
+                            }
+                        } else {
+                            resolve(buffer);
+                        }
+                    });
+                });
+
+                apiReq.on('error', (error) => {
+                    console.error('Request error:', error);
+                    reject(error);
+                });
+
+                apiReq.on('timeout', () => {
+                    apiReq.destroy();
+                    reject(new Error('Request timeout'));
+                });
+
+                apiReq.write(postData);
+                apiReq.end();
             });
-        }
+        };
 
-        // Get the image buffer
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const buffer = await makeRequest();
         const base64Image = buffer.toString('base64');
 
-        console.log('Image processed successfully');
+        console.log('Image processed successfully. Size:', base64Image.length);
 
         return res.status(200).json({ 
             success: true, 
@@ -85,10 +110,10 @@ module.exports = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in handler:', error);
+        console.error('Error in handler:', error.message);
         return res.status(500).json({ 
             success: false, 
-            error: error.message || 'Internal server error' 
+            error: error.message || 'Failed to process image. Please try again.' 
         });
     }
 };
