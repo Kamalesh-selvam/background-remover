@@ -1,22 +1,13 @@
-const fetch = require('node-fetch');
-
 module.exports = async (req, res) => {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle OPTIONS request
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
-    // Only allow POST requests
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
@@ -30,26 +21,61 @@ module.exports = async (req, res) => {
             return res.status(400).json({ success: false, error: 'No image provided' });
         }
 
-        console.log('Processing image...');
+        // Use native https module instead of node-fetch
+        const https = require('https');
+        
+        const postData = JSON.stringify({
+            image_file_b64: image_file_b64,
+            size: 'auto'
+        });
 
-        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+        const options = {
+            hostname: 'api.remove.bg',
+            port: 443,
+            path: '/v1.0/removebg',
             method: 'POST',
             headers: {
                 'X-Api-Key': API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                image_file_b64: image_file_b64,
-                size: 'auto'
-            })
-        });
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        };
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.errors?.[0]?.title || 'Failed to remove background');
-        }
+        const makeRequest = () => {
+            return new Promise((resolve, reject) => {
+                const apiReq = https.request(options, (apiRes) => {
+                    let data = [];
 
-        const buffer = await response.buffer();
+                    apiRes.on('data', (chunk) => {
+                        data.push(chunk);
+                    });
+
+                    apiRes.on('end', () => {
+                        const buffer = Buffer.concat(data);
+                        
+                        if (apiRes.statusCode !== 200) {
+                            try {
+                                const error = JSON.parse(buffer.toString());
+                                reject(new Error(error.errors?.[0]?.title || 'Failed to remove background'));
+                            } catch (e) {
+                                reject(new Error(`HTTP Error ${apiRes.statusCode}`));
+                            }
+                        } else {
+                            resolve(buffer);
+                        }
+                    });
+                });
+
+                apiReq.on('error', (error) => {
+                    reject(error);
+                });
+
+                apiReq.write(postData);
+                apiReq.end();
+            });
+        };
+
+        const buffer = await makeRequest();
         const base64Image = buffer.toString('base64');
 
         res.status(200).json({ 

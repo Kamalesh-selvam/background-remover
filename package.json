@@ -1,16 +1,6 @@
 {
   "name": "background-remover",
   "version": "1.0.0",
-  "description": "AI-powered background remover web application",
-  "main": "api/remove-bg.js",
-  "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel"
-  },
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  },
-  "engines": {
-    "node": ">=14.x"
-  }
+  "description": "AI-powered background remover",
+  "dependencies": {}
 }
