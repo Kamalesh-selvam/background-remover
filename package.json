@@ -1,6 +1,5 @@
 {
   "name": "background-remover",
   "version": "1.0.0",
-  "description": "AI-powered background remover",
-  "dependencies": {}
+  "description": "AI-powered background remover"
 }
