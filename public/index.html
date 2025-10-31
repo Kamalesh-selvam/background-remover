@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Background Remover Pro</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Remove backgrounds from images instantly with AI">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BG Remover">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    
     <style>
         * {
             margin: 0;
@@ -41,6 +56,44 @@
         .subtitle {
             font-size: 1.2em;
             opacity: 0.9;
+        }
+
+        .install-prompt {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            animation: slideDown 0.3s ease;
+        }
+
+        .install-prompt.show {
+            display: flex;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .install-prompt-text {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+        }
+
+        .install-prompt-icon {
+            font-size: 2em;
         }
 
         .main-card {
@@ -202,6 +255,18 @@
             box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
 
+        .btn-install {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 12px 30px;
+            font-size: 1em;
+        }
+
+        .btn-install:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -262,6 +327,12 @@
             .main-card {
                 padding: 25px;
             }
+
+            .install-prompt {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -271,6 +342,21 @@
             <h1>✨ Background Remover Pro</h1>
             <p class="subtitle">Remove backgrounds from images instantly with AI</p>
         </header>
+
+        <!-- Install Prompt -->
+        <div class="install-prompt" id="installPrompt">
+            <div class="install-prompt-text">
+                <span class="install-prompt-icon">📱</span>
+                <div>
+                    <strong>Install our app!</strong>
+                    <p style="font-size: 0.9em; margin-top: 5px;">Get quick access from your home screen</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-install" id="installBtn">Install</button>
+                <button class="btn-secondary" id="dismissInstallBtn" style="padding: 12px 20px; font-size: 1em;">Later</button>
+            </div>
+        </div>
 
         <div class="main-card">
             <div class="upload-area" id="uploadArea">
@@ -464,6 +550,52 @@
 
         function hideError() {
             errorMessage.classList.remove('active');
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installPrompt = document.getElementById('installPrompt');
+        const installBtn = document.getElementById('installBtn');
+        const dismissInstallBtn = document.getElementById('dismissInstallBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Check if user previously dismissed
+            if (!localStorage.getItem('installDismissed')) {
+                installPrompt.classList.add('show');
+            }
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response: ${outcome}`);
+                deferredPrompt = null;
+                installPrompt.classList.remove('show');
+            }
+        });
+
+        dismissInstallBtn.addEventListener('click', () => {
+            installPrompt.classList.remove('show');
+            localStorage.setItem('installDismissed', 'true');
+        });
+
+        // Handle successful installation
+        window.addEventListener('appinstalled', () => {
+            console.log('App installed successfully!');
+            installPrompt.classList.remove('show');
+        });
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Service Worker registered:', reg))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            });
         }
     </script>
 </body>
